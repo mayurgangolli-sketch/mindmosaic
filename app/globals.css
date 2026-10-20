@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #f4fbf9;
+    --foreground: #134e4a;
+  }
+
+  .dark {
+    --background: #071719;
+    --foreground: #f0fdfb;
+  }
+
+  body {
+    color: var(--foreground);
+    background-color: var(--background);
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Accessible focus visible rings */
+  *:focus-visible {
+    outline: 2px solid #0d9488;
+    outline-offset: 2px;
+  }
+
+  .dark *:focus-visible {
+    outline: 2px solid #2dd4bf;
+    outline-offset: 2px;
+  }
+
+  /* Full support for reduced-motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Luminous atmospheric backgrounds */
+  .bg-ambient-light {
+    background-color: #f4fbf9;
+    background-image: radial-gradient(circle at 50% -5%, #d5f7f2 0%, #edfbf8 40%, #f7fdfc 100%);
+  }
+
+  .dark .bg-ambient-dark,
+  .dark.bg-ambient-dark {
+    background-color: #071719;
+    background-image: radial-gradient(circle at 50% -5%, #10383f 0%, #0b2226 55%, #071719 100%);
+  }
+
+  /* Layered tactile glass surfaces */
+  .glass-surface {
+    background-color: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(45, 212, 191, 0.28);
+  }
+
+  .dark .glass-surface {
+    background-color: rgba(11, 34, 38, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(45, 212, 191, 0.2);
+  }
+
+  .glass-card-layered {
+    background-color: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(153, 246, 228, 0.6);
+  }
+
+  .dark .glass-card-layered {
+    background-color: rgba(16, 44, 50, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(45, 212, 191, 0.26);
+  }
+
+  /* Folio paper sheet styling for journal writing */
+  .journal-sheet {
+    background-color: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(45, 212, 191, 0.35);
+    box-shadow: 0 10px 30px -10px rgba(13, 148, 136, 0.1);
+  }
+
+  .dark .journal-sheet {
+    background-color: rgba(11, 34, 38, 0.92);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(45, 212, 191, 0.24);
+    box-shadow: 0 16px 40px -15px rgba(0, 0, 0, 0.7);
+  }
+}
