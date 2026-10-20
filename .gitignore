@@ -28,3 +28,9 @@ yarn-error.log*
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Agent harness metadata
+.agents/
+.claude/
+agent/
+skills-lock.json

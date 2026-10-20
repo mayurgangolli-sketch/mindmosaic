@@ -14,21 +14,36 @@ import {
   X,
   BookOpen,
   Calendar,
-  Sparkles
+  Sparkles,
+  Bot,
+  RotateCcw
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { ConsentModal } from '@/components/ConsentModal';
 import {
   getSessions,
   createSession,
+  saveSession,
   formatSessionDate,
-  JournalSession
+  JournalSession,
+  Message
 } from '@/lib/storage';
 
 export function JournalEntry() {
   const [entryText, setEntryText] = useState('');
   const [greeting, setGreeting] = useState('Welcome');
   const [sessions, setSessions] = useState<JournalSession[]>([]);
+  const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [selectedSession, setSelectedSession] = useState<JournalSession | null>(null);
+  
+  // Consent & AI status state
+  const [isConsentOpen, setIsConsentOpen] = useState(false);
+  const [pendingText, setPendingText] = useState<string | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [consentDeclinedNotice, setConsentDeclinedNotice] = useState(false);
+
+  // Save feedback state
   const [saveBanner, setSaveBanner] = useState<{ message: string; time: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -72,8 +87,18 @@ export function JournalEntry() {
     }
   };
 
-  // Immediate local save
-  const handleSave = (e: React.FormEvent) => {
+  // Restore local-mode preference if previously declined in this session
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('mindmosaic_consent_given');
+      if (stored === 'false') {
+        setConsentDeclinedNotice(true);
+      }
+    }
+  }, []);
+
+  // 1. Save locally to localStorage FIRST, then check consent before AI call
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = entryText.trim();
     if (!trimmed) {
@@ -82,46 +107,184 @@ export function JournalEntry() {
     }
 
     try {
-      // 1. Save locally to localStorage immediately
-      const newSession = createSession(trimmed);
-
-      // 2. Update local state immediately so user sees it in Recent Reflections
+      // Step 1: Save locally to localStorage immediately BEFORE any network request
+      const session = createSession(trimmed);
+      setCurrentSession(session);
       refreshSessions();
 
-      // 3. Set positive verification banner
-      const formatted = formatSessionDate(newSession.createdAt);
+      const formatted = formatSessionDate(session.createdAt);
       setSaveBanner({
         message: 'Reflection safely recorded to your browser storage.',
         time: formatted.full,
       });
 
-      // 4. Clear textarea and error state
-      setEntryText('');
-      setSaveError(null);
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+      // Step 2: Check consent state in sessionStorage
+      const consentGiven = typeof window !== 'undefined' ? sessionStorage.getItem('mindmosaic_consent_given') : null;
+
+      if (consentGiven === 'true') {
+        // Consent already given this session -> clear composer and proceed to AI request
+        setEntryText('');
+        setSaveError(null);
+        if (textareaRef.current) {
+          textareaRef.current.style.height = 'auto';
+        }
+        requestAiResponse(session, trimmed);
+      } else if (consentGiven === 'false') {
+        // Consent previously declined this session -> preserve local only without repeating prompt
+        // Preserve typed text in textarea so user can review, edit, or explicitly connect
+        setSaveError(null);
+        setConsentDeclinedNotice(true);
+      } else {
+        // First AI interaction or previously dismissed -> open consent modal
+        // Preserve typed text in textarea so dismissing/declining never causes data loss
+        setSaveError(null);
+        setPendingText(trimmed);
+        setIsConsentOpen(true);
       }
     } catch (err: any) {
       setSaveError(err?.message || 'Could not save your reflection to local storage.');
     }
   };
 
-  // Close modal with Escape key
+  // 2. User confirms consent ("Agree & Connect")
+  const handleConfirmConsent = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('mindmosaic_consent_given', 'true');
+    }
+    setIsConsentOpen(false);
+    setConsentDeclinedNotice(false);
+
+    const textToSend = pendingText || entryText.trim() || currentSession?.entryText;
+    if (currentSession && textToSend) {
+      // Clear composer now that it has been handed off to the companion thread
+      setEntryText('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      requestAiResponse(currentSession, textToSend);
+      setPendingText(null);
+    }
+  };
+
+  // 3. User explicitly declines consent ("Keep Reflection Local Only")
+  // Preserves typed text in textarea and local storage, does not call /api/chat
+  const handleDeclineConsent = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('mindmosaic_consent_given', 'false');
+    }
+    setIsConsentOpen(false);
+    setPendingText(null);
+    setConsentDeclinedNotice(true);
+  };
+
+  // 4. User dismisses the modal (clicks X, clicks backdrop, or presses Escape)
+  // Preserves exact typed text in textarea, does not modify sessionStorage, does not call /api/chat
+  const handleDismissConsent = () => {
+    setIsConsentOpen(false);
+    setPendingText(null);
+  };
+
+  // 5. Explicitly connect to AI (e.g. from local-mode banner after declining)
+  const handleExplicitConnect = () => {
+    const textToUse = entryText.trim() || currentSession?.entryText;
+    if (!textToUse || !currentSession) return;
+
+    const consentGiven = typeof window !== 'undefined' ? sessionStorage.getItem('mindmosaic_consent_given') : null;
+    if (consentGiven === 'true') {
+      setEntryText('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      requestAiResponse(currentSession, textToUse);
+    } else {
+      setPendingText(textToUse);
+      setIsConsentOpen(true);
+    }
+  };
+
+  // 6. Server-side API request via /api/chat proxy (strictly verifies consent first)
+  const requestAiResponse = async (session: JournalSession, textToAnalyze: string) => {
+    // Defense-in-depth: Never send AI requests without explicit session consent
+    const consent = typeof window !== 'undefined' ? sessionStorage.getItem('mindmosaic_consent_given') : null;
+    if (consent !== 'true') {
+      console.warn('[MindMosaic] AI request aborted: explicit consent has not been granted.');
+      setPendingText(textToAnalyze);
+      setIsConsentOpen(true);
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiError(null);
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: textToAnalyze,
+          conversationHistory: session.conversation || [],
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with status ${res.status}`);
+      }
+
+      const json = await res.json();
+      const aiData = json.data;
+
+      // Create new assistant message
+      const assistantMessage: Message = {
+        id: `msg_${Date.now()}`,
+        role: 'assistant',
+        content: aiData.content,
+        timestamp: new Date().toISOString(),
+        isSimulated: aiData.isSimulated,
+      };
+
+      // Append to the active session and persist to localStorage
+      const updatedSession: JournalSession = {
+        ...session,
+        conversation: [...(session.conversation || []), assistantMessage],
+      };
+
+      saveSession(updatedSession);
+      setCurrentSession(updatedSession);
+      refreshSessions();
+    } catch (err: any) {
+      console.error('Error contacting AI companion:', err);
+      setAiError(err?.message || 'Could not reach the AI companion service. Your reflection is still safely stored locally.');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Close modals with Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedSession) {
-        setSelectedSession(null);
+      if (e.key === 'Escape') {
+        if (selectedSession) setSelectedSession(null);
+        if (isConsentOpen) handleDismissConsent();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedSession]);
+  }, [selectedSession, isConsentOpen]);
 
   const wordCount = entryText.trim() ? entryText.trim().split(/\s+/).length : 0;
   const charCount = entryText.length;
 
   return (
     <div className="min-h-screen flex flex-col justify-between p-4 sm:p-8 max-w-4xl mx-auto transition-colors duration-300">
+      {/* Privacy Consent Modal */}
+      <ConsentModal
+        isOpen={isConsentOpen}
+        onConfirm={handleConfirmConsent}
+        onDecline={handleDeclineConsent}
+        onDismiss={handleDismissConsent}
+      />
+
       {/* Top navigation */}
       <header className="flex items-center justify-between pb-6 border-b border-aqua-200/40 dark:border-night-border/50">
         <Link
@@ -144,11 +307,11 @@ export function JournalEntry() {
         <ThemeToggle />
       </header>
 
-      {/* Main Journal Composition */}
+      {/* Main Content Area */}
       <main className="my-auto py-6 sm:py-10 space-y-12">
-        {/* Spacious Writing Sheet */}
+        {/* Active Composer Section */}
         <section aria-labelledby="composer-heading">
-          <form onSubmit={handleSave} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Header prompt with refined hierarchy */}
             <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 pb-1">
               <div>
@@ -242,8 +405,134 @@ export function JournalEntry() {
           </form>
         </section>
 
+        {/* AI Companion Response Area (When reflection is submitted) */}
+        {currentSession && (
+          <section aria-labelledby="companion-response-heading" className="space-y-4">
+            <div className="flex items-center justify-between pb-1">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-aqua-600 dark:text-mint-400" />
+                <h2 id="companion-response-heading" className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">
+                  Companion Response
+                </h2>
+              </div>
+              {currentSession.conversation && currentSession.conversation.length > 0 && (
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-aqua-100/70 dark:bg-night-card text-aqua-800 dark:text-aqua-300 font-medium">
+                  Active Thread
+                </span>
+              )}
+            </div>
+
+            {/* AI Loading State */}
+            {isAiLoading && (
+              <div className="glass-surface p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-aqua-200/50 dark:border-night-border animate-pulse flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-aqua-100 dark:bg-night-card flex items-center justify-center text-aqua-700 dark:text-mint-400">
+                  <Bot className="w-5 h-5 animate-spin" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                    MindMosaic is reflecting on what you wrote...
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-night-muted mt-0.5">
+                    Listening attentively before responding.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* AI Error / Retry State */}
+            {aiError && (
+              <div className="p-5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs sm:text-sm text-amber-900 dark:text-amber-200 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">{aiError}</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      Your journal reflection is safely stored locally. You can try connecting again whenever you are ready.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExplicitConnect}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium bg-amber-200/70 dark:bg-amber-900/60 text-amber-950 dark:text-amber-100 hover:bg-amber-300 transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Retry AI Response</span>
+                </button>
+              </div>
+            )}
+
+            {/* Consent Declined Notice */}
+            {consentDeclinedNotice && !isAiLoading && (
+              <div className="glass-surface p-5 rounded-2xl border border-aqua-200/40 dark:border-night-border text-xs sm:text-sm text-slate-600 dark:text-night-muted flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <Shield className="w-4 h-4 text-aqua-600 dark:text-mint-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-white">
+                      Private Local Mode Active
+                    </p>
+                    <p className="text-xs mt-0.5">
+                      You chose to keep reflections local on this device. No text is sent to external AI services.
+                    </p>
+                  </div>
+                </div>
+                {currentSession && (!currentSession.conversation || currentSession.conversation.length === 0) && (
+                  <button
+                    type="button"
+                    onClick={handleExplicitConnect}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-medium text-aqua-800 dark:text-aqua-300 bg-aqua-100/70 dark:bg-night-card hover:bg-aqua-200/70 dark:hover:bg-night-surface border border-aqua-200/60 dark:border-night-border transition-colors flex-shrink-0"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Connect to AI Companion</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Display AI Conversation Turn */}
+            {currentSession.conversation && currentSession.conversation.length > 0 && (
+              <div className="space-y-4">
+                {currentSession.conversation.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className="journal-sheet p-6 sm:p-7 rounded-2xl sm:rounded-3xl border border-aqua-200/60 dark:border-night-border shadow-sm space-y-3"
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-aqua-100/60 dark:border-night-border/50 text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-xl bg-aqua-100 dark:bg-night-card flex items-center justify-center text-aqua-700 dark:text-mint-400">
+                          <Bot className="w-4 h-4" />
+                        </div>
+                        <span className="font-serif font-bold text-slate-900 dark:text-white">
+                          MindMosaic Companion
+                        </span>
+                      </div>
+                      {msg.isSimulated && (
+                        <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
+                          Offline Demo Mode
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-sm sm:text-base text-slate-800 dark:text-night-text leading-relaxed whitespace-pre-wrap font-sans">
+                      {msg.content}
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between text-xs text-slate-400 dark:text-night-muted border-t border-aqua-100/40 dark:border-night-border/40">
+                      <span>{formatSessionDate(msg.timestamp).full}</span>
+                      <span className="text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Saved in local session
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Recent Reflections on This Device */}
-        <section aria-labelledby="recent-reflections-heading" className="space-y-4 pt-2">
+        <section aria-labelledby="recent-reflections-heading" className="space-y-4 pt-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-aqua-700 dark:text-mint-400" />
@@ -275,6 +564,7 @@ export function JournalEntry() {
               {sessions.map((session) => {
                 const formatted = formatSessionDate(session.createdAt);
                 const words = session.entryText.trim().split(/\s+/).length;
+                const hasConversation = session.conversation && session.conversation.length > 0;
                 return (
                   <article
                     key={session.id}
@@ -294,9 +584,16 @@ export function JournalEntry() {
                         <Calendar className="w-3.5 h-3.5 text-aqua-600 dark:text-mint-400" />
                         <span>{formatted.full}</span>
                       </div>
-                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-aqua-50 dark:bg-night-surface text-slate-600 dark:text-night-muted">
-                        {words} {words === 1 ? 'word' : 'words'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {hasConversation && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-aqua-100 dark:bg-night-card text-aqua-800 dark:text-aqua-300 font-medium">
+                            Thread saved
+                          </span>
+                        )}
+                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-aqua-50 dark:bg-night-surface text-slate-600 dark:text-night-muted">
+                          {words} {words === 1 ? 'word' : 'words'}
+                        </span>
+                      </div>
                     </div>
 
                     <p className="mt-3 text-sm sm:text-base text-slate-700 dark:text-slate-200 line-clamp-2 leading-relaxed font-sans">
@@ -304,7 +601,7 @@ export function JournalEntry() {
                     </p>
 
                     <div className="mt-3.5 flex items-center justify-between text-xs text-aqua-700 dark:text-mint-400 font-medium">
-                      <span>Click to read full reflection</span>
+                      <span>Click to read full entry and conversation</span>
                       <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </article>
@@ -328,13 +625,13 @@ export function JournalEntry() {
             className="fixed inset-0 z-50 bg-slate-900/50 dark:bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-150"
           >
             <div className="glass-card-layered w-full max-w-lg rounded-2xl sm:rounded-3xl p-6 sm:p-7 shadow-2xl border border-aqua-200 dark:border-night-border max-h-[85vh] flex flex-col justify-between">
-              <div>
+              <div className="overflow-y-auto pr-1 space-y-4">
                 {/* Modal Header */}
                 <div className="flex items-center justify-between pb-3.5 border-b border-aqua-100 dark:border-night-border">
                   <div className="flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-aqua-700 dark:text-mint-400" />
                     <h3 id="modal-title" className="text-base font-serif font-bold text-slate-900 dark:text-white">
-                      Saved Reflection
+                      Saved Session View
                     </h3>
                   </div>
                   <button
@@ -347,21 +644,53 @@ export function JournalEntry() {
                 </div>
 
                 {/* Timestamp */}
-                <div className="mt-3 flex items-center gap-2 text-xs text-slate-500 dark:text-night-muted">
+                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-night-muted">
                   <Clock className="w-3.5 h-3.5 text-aqua-600 dark:text-mint-400" />
                   <span>
                     Recorded: {formatSessionDate(selectedSession.createdAt).full}
                   </span>
                 </div>
 
-                {/* Full Reflection Reading View */}
-                <div className="mt-4 p-5 rounded-xl sm:rounded-2xl bg-white/80 dark:bg-night-surface/90 border border-aqua-100 dark:border-night-border text-slate-800 dark:text-night-text text-base leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
-                  {selectedSession.entryText}
+                {/* Original Reflection Text */}
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-night-muted mb-1.5">
+                    Your Reflection:
+                  </h4>
+                  <div className="p-4 rounded-xl sm:rounded-2xl bg-white/80 dark:bg-night-surface/90 border border-aqua-100 dark:border-night-border text-slate-800 dark:text-night-text text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
+                    {selectedSession.entryText}
+                  </div>
                 </div>
+
+                {/* Conversation Transcript if present */}
+                {selectedSession.conversation && selectedSession.conversation.length > 0 && (
+                  <div className="space-y-2 pt-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-night-muted mb-1.5">
+                      Companion Transcript:
+                    </h4>
+                    {selectedSession.conversation.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className="p-3.5 rounded-xl bg-aqua-50/70 dark:bg-night-card/80 border border-aqua-200/50 dark:border-night-border text-xs sm:text-sm text-slate-800 dark:text-night-text leading-relaxed"
+                      >
+                        <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-aqua-100/50 dark:border-night-border/40 text-[11px] text-slate-500 dark:text-night-muted">
+                          <span className="font-semibold text-aqua-900 dark:text-aqua-300">
+                            {msg.role === 'assistant' ? 'MindMosaic Companion' : 'You'}
+                          </span>
+                          {msg.isSimulated && (
+                            <span className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">
+                              Offline Demo
+                            </span>
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Modal Footer */}
-              <div className="mt-6 pt-3.5 flex items-center justify-between text-xs text-slate-500 dark:text-night-muted border-t border-aqua-100 dark:border-night-border">
+              <div className="mt-5 pt-3.5 flex items-center justify-between text-xs text-slate-500 dark:text-night-muted border-t border-aqua-100 dark:border-night-border">
                 <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   Verified in local storage

@@ -19,7 +19,7 @@ Build mode: learn
   Learner check: Open the app on mobile or desktop browser, toggle between Light, Dark, and System themes, click "Start Journaling", type a reflection, and confirm it saves locally with comfortable typography and no visual glitch.
   Commit: `Scaffold app, theme system, welcome view, and local-first journal entry`
 
-- [ ] **2. Privacy Consent Modal and Secure Server-Side AI Proxy with Transparent Mock Fallback**
+- [x] **2. Privacy Consent Modal and Secure Server-Side AI Proxy with Transparent Mock Fallback**
   Becomes usable: Submitting a reflection prompts a clear privacy consent dialog on the first AI interaction of the session. If accepted or declined, the app communicates with a secure server-side API route (`/api/chat`) backed by a swappable provider adapter. If no API key is present or AI is offline, the app returns a transparently labeled mock response (`[Simulated Demo Response - AI Offline]`) without crashing.
   Why now: Enforces the server-side security boundary (keeping secrets off the client) and the user consent workflow before live AI services are connected.
   PRD ref: `prd.md > Privacy Consent`, `prd.md > States and Boundaries`
