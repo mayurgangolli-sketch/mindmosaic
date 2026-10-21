@@ -29,7 +29,7 @@ Build mode: learn
   Learner check: Submit an entry on the journal screen. Confirm the consent dialog appears, explain what happens if you decline vs agree, and observe the honest fallback response.
   Commit: `Add privacy consent modal, server API proxy, and honest mock fallback`
 
-- [ ] **3. Live Groq AI Integration, Friend-First Companion Prompt, and Medical/Crisis Safety Boundaries**
+- [x] **3. Live Groq AI Integration, Friend-First Companion Prompt, and Medical/Crisis Safety Boundaries**
   Becomes usable: Connecting a free Groq API key allows live AI companion responses. The AI responds like an attentive friend: validating specific feelings without unsolicited advice, lecture, or formulaic empathy. If crisis or severe medical symptoms are detected, the app displays emergency guidance immediately.
   Why now: Connects the core AI engine and implements the critical health-safety and crisis intervention boundaries before conversational branching is introduced.
   PRD ref: `prd.md > AI Companion — Friend-First Response`, `prd.md > Safety Boundary`, `prd.md > Health Concerns and Medical Referral`
@@ -39,7 +39,7 @@ Build mode: learn
   Learner check: Test with fictional journal entries (e.g. feeling stressed about exams, or describing a headache). Confirm the AI listens like a real friend without offering unsolicited advice or robotic empathy.
   Commit: `Integrate Groq AI, friend-first companion prompt, and safety banners`
 
-- [ ] **4. Conversational Branching ("Talk More" vs "Get a Suggestion") and Multi-Turn Dialogue**
+- [x] **4. Conversational Branching ("Talk More" vs "Get a Suggestion") and Multi-Turn Dialogue**
   Becomes usable: After the AI's first response, the user is offered two clear choices: "Talk more" or "Get a suggestion". The user can converse back and forth naturally, with every message saved immediately to `localStorage`. A subtle switch remains accessible to change branches anytime.
   Why now: Delivers the core interactive journey from the PRD, giving the user control over the conversation's depth and direction.
   PRD ref: `prd.md > AI Companion — Talk More Branch`, `prd.md > AI Companion — Get a Suggestion Branch`, `prd.md > AI Companion Conversation`
@@ -71,24 +71,24 @@ Build mode: learn
 
 ## Hands-on Checkpoints
 
-- [ ] Early usable behavior explored — Checkpoint after Slice 2 (Scaffold, Themes, Journal Entry, Consent, and Mock Fallback running locally)
-- [ ] Final kick-the-tires exploration and feedback completed — After Slice 6 (Full end-to-end user journey across all screens and features)
+- [x] Early usable behavior explored — Checkpoint after Slice 2 (Scaffold, Themes, Journal Entry, Consent, and Mock Fallback running locally)
+- [x] Final kick-the-tires exploration and feedback completed — After Slice 6 (Full end-to-end user journey across all screens and features)
 
 ## Final Review
 
-- [ ] Final review complete — feedback resolved and learner confirms ready to ship
+- [x] Final review complete — feedback resolved and learner confirms ready to ship
 
 ## Code Tour and App Map
 
-- [ ] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
-- [ ] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
-- [ ] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
+- [x] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
+- [x] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
+- [x] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
 
-Activity and evidence: [to be recorded on completion]
-Route and stops: [to be recorded on completion]
-Edit outcome: [to be recorded on completion]
-Reflection: [to be recorded on completion]
-Activity mode: [to be recorded on completion]
+Activity and evidence: Guided Code Tour following a reflection submission across frontend, API proxy/safety guards, and local storage partitions; learner completed comprehension checks at each stop.
+Route and stops: 1. components/JournalEntry.tsx (save-first & consent gate), 2. app/api/chat/route.ts (deterministic medical/crisis guards & provider selection), 3. lib/storage.ts (partition isolation & resilient deletion).
+Edit outcome: Offered and declined; learner chose to keep verified code unchanged.
+Reflection: Addressed; learner noted: "Deterministic safety rules should run before statistical AI models for critical safety decisions. Next time, plan smaller implementation slices, review the plan before coding, and test each feature before moving to the next."
+Activity mode: guided
 
 ## Revisions
 

@@ -29,6 +29,7 @@ import { MemorySettingsModal } from '@/components/MemorySettingsModal';
 import { MemoryApprovalCard, MemoryCandidate } from '@/components/MemoryApprovalCard';
 import { SafetyBanner } from '@/components/SafetyBanner';
 import { FormattedMessage } from '@/components/FormattedMessage';
+import { BranchChoice, BranchSwitcher } from '@/components/BranchChoice';
 import {
   getSessions,
   createSession,
@@ -65,6 +66,10 @@ export function JournalEntry() {
   const [replyText, setReplyText] = useState('');
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const conversationEndRef = useRef<HTMLDivElement>(null);
+
+  // Slice 4: Conversational branching state ('talk' | 'suggestion' | null)
+  const [activeBranch, setActiveBranch] = useState<'talk' | 'suggestion' | null>(null);
+  const retryActionRef = useRef<(() => void) | null>(null);
 
   // Companion Memory Settings state (Slice 5A & 5B)
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
@@ -107,6 +112,23 @@ export function JournalEntry() {
     setMemorySettings(getMemorySettings());
     setThemeTrackingSettings(getThemeTrackingSettings());
   }, []);
+
+  // Slice 4: Restore active branch consistently when session changes or resumes
+  useEffect(() => {
+    if (!currentSession) {
+      setActiveBranch(null);
+      return;
+    }
+    const conv = currentSession.conversation || [];
+    const lastBranch = [...conv].reverse().find((m) => m.branchChoice)?.branchChoice;
+    if (lastBranch) {
+      setActiveBranch(lastBranch);
+    } else if (conv.length > 1) {
+      setActiveBranch('talk');
+    } else {
+      setActiveBranch(null);
+    }
+  }, [currentSession?.id]);
 
   const refreshSessions = () => {
     try {
@@ -260,6 +282,12 @@ export function JournalEntry() {
 
     if (!currentSession) return;
 
+    if (pendingText === 'suggestion_request') {
+      setPendingText(null);
+      handleRequestSuggestion();
+      return;
+    }
+
     const conversation = currentSession.conversation || [];
     const isInitial = conversation.length === 0;
     const textToSend = pendingText || (isInitial ? currentSession.entryText : replyText.trim());
@@ -278,6 +306,7 @@ export function JournalEntry() {
           role: 'user',
           content: textToSend,
           timestamp: new Date().toISOString(),
+          branchChoice: activeBranch || 'talk',
         };
 
         const sessionWithUserMsg: JournalSession = {
@@ -294,7 +323,7 @@ export function JournalEntry() {
           replyTextareaRef.current.style.height = 'auto';
         }
 
-        dispatchAiTurn(sessionWithUserMsg, textToSend, false);
+        dispatchAiTurn(sessionWithUserMsg, textToSend, false, activeBranch || 'talk');
       }
       setPendingText(null);
     }
@@ -368,11 +397,13 @@ export function JournalEntry() {
     }
 
     // Step 1: Save user message locally BEFORE any network dispatch
+    const branchToUse = activeBranch || 'talk';
     const userMessage: Message = {
       id: `msg_user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       role: 'user',
       content: trimmed,
       timestamp: new Date().toISOString(),
+      branchChoice: branchToUse,
     };
 
     const sessionWithUserMsg: JournalSession = {
@@ -391,11 +422,132 @@ export function JournalEntry() {
     }
 
     // Step 2: Request AI response
-    dispatchAiTurn(sessionWithUserMsg, trimmed, false);
+    dispatchAiTurn(sessionWithUserMsg, trimmed, false, branchToUse);
+  };
+
+  // Slice 4: Branch Selection Handler
+  const handleSelectBranch = (branch: 'talk' | 'suggestion') => {
+    if (isAiLoading || !currentSession) return;
+    if (branch === 'talk') {
+      setActiveBranch('talk');
+      setTimeout(() => replyTextareaRef.current?.focus(), 50);
+    } else {
+      handleRequestSuggestion();
+    }
+  };
+
+  // Slice 4: Branch Switch Handler (Non-retroactive, preserves existing message tags)
+  const handleSwitchBranch = (targetBranch: 'talk' | 'suggestion') => {
+    if (isAiLoading) return;
+    setActiveBranch(targetBranch);
+    if (targetBranch === 'talk') {
+      setTimeout(() => replyTextareaRef.current?.focus(), 50);
+    }
+  };
+
+  // Slice 4: Request suggestions directly (Option A - immediate fetch with loading and duplicate protection)
+  const handleRequestSuggestion = async () => {
+    if (isAiLoading || !currentSession) return;
+
+    // Consent check: Never send AI requests without explicit consent
+    const consent =
+      typeof window !== 'undefined' ? sessionStorage.getItem('mindmosaic_consent_given') : null;
+    if (consent !== 'true') {
+      setPendingText('suggestion_request');
+      setIsConsentOpen(true);
+      return;
+    }
+
+    setIsAiLoading(true);
+    setAiError(null);
+    setActiveBranch('suggestion');
+
+    // Register retry action
+    retryActionRef.current = () => handleRequestSuggestion();
+
+    // Prepare previous history for context
+    const allTurns = currentSession.conversation || [];
+    const hasInitialTurn = allTurns.length > 0 && allTurns[0].content === currentSession.entryText;
+    const baseHistory = hasInitialTurn
+      ? allTurns
+      : [{ role: 'user' as const, content: currentSession.entryText }, ...allTurns];
+    const history = baseHistory.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    // Memory retrieval & safety check
+    let relevantMemories: any[] = [];
+    const memSettings = getMemorySettings();
+    const safetyCheck = checkSafetyPatterns(currentSession.entryText);
+
+    if (memSettings.enabled && !safetyCheck.isCrisis && !safetyCheck.isMedicalEmergency) {
+      const savedMemories = getMemories();
+      relevantMemories = selectRelevantMemories(currentSession.entryText, savedMemories);
+    }
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Could you please share 1–2 practical suggestions or gentle coping perspectives based on what I shared?',
+          conversationHistory: history,
+          relevantMemories,
+          branchChoice: 'suggestion',
+          isInternalRequest: true,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with status ${res.status}`);
+      }
+
+      const json = await res.json();
+      const aiData = json.data;
+
+      // Create new assistant message tagged with branchChoice: 'suggestion'
+      // Note: Transcript integrity is strictly preserved. No synthetic user message is created.
+      const assistantMessage: Message = {
+        id: `msg_asst_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        role: 'assistant',
+        content: aiData.content,
+        timestamp: new Date().toISOString(),
+        branchChoice: 'suggestion',
+        isSimulated: aiData.isSimulated,
+        safetyAlert: aiData.safetyAlert,
+      };
+
+      const updatedSession: JournalSession = {
+        ...currentSession,
+        conversation: [...(currentSession.conversation || []), assistantMessage],
+      };
+
+      saveSession(updatedSession);
+      setCurrentSession(updatedSession);
+      refreshSessions();
+
+      if (!assistantMessage.safetyAlert) {
+        triggerMemoryExtraction(currentSession.entryText, currentSession.id);
+      }
+    } catch (err: any) {
+      console.error('Error fetching suggestions:', err);
+      setAiError(
+        err?.message ||
+          'Could not reach the AI companion service. Your reflection is safely stored in local memory.'
+      );
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   // Safe retry handler without creating duplicate user messages
   const handleRetryAi = () => {
+    if (retryActionRef.current) {
+      retryActionRef.current();
+      return;
+    }
     if (!currentSession) return;
     const conversation = currentSession.conversation || [];
     if (conversation.length === 0) {
@@ -406,7 +558,9 @@ export function JournalEntry() {
     // Find the last user turn in conversation
     const lastUserTurn = [...conversation].reverse().find((m) => m.role === 'user');
     if (lastUserTurn) {
-      dispatchAiTurn(currentSession, lastUserTurn.content, false);
+      dispatchAiTurn(currentSession, lastUserTurn.content, false, activeBranch || undefined);
+    } else if (activeBranch === 'suggestion') {
+      handleRequestSuggestion();
     } else {
       dispatchAiTurn(currentSession, currentSession.entryText, true);
     }
@@ -494,7 +648,8 @@ export function JournalEntry() {
   const dispatchAiTurn = async (
     session: JournalSession,
     userMessageContent: string,
-    isInitial = false
+    isInitial = false,
+    branchForTurn?: 'talk' | 'suggestion'
   ) => {
     // Defense-in-depth: Never send AI requests without explicit session consent
     const consent =
@@ -505,6 +660,10 @@ export function JournalEntry() {
       setIsConsentOpen(true);
       return;
     }
+
+    const effectiveBranch = branchForTurn || (isInitial ? undefined : activeBranch || 'talk');
+    retryActionRef.current = () =>
+      dispatchAiTurn(session, userMessageContent, isInitial, effectiveBranch);
 
     setIsAiLoading(true);
     setAiError(null);
@@ -542,6 +701,7 @@ export function JournalEntry() {
           message: userMessageContent,
           conversationHistory: history,
           relevantMemories,
+          branchChoice: effectiveBranch,
         }),
       });
 
@@ -559,6 +719,7 @@ export function JournalEntry() {
         role: 'assistant',
         content: aiData.content,
         timestamp: new Date().toISOString(),
+        branchChoice: effectiveBranch,
         isSimulated: aiData.isSimulated,
         safetyAlert: aiData.safetyAlert,
       };
@@ -806,6 +967,8 @@ export function JournalEntry() {
                   type="button"
                   onClick={() => {
                     setCurrentSession(null);
+                    setActiveBranch(null);
+                    retryActionRef.current = null;
                     setSaveBanner(null);
                     setAiError(null);
                     setConsentDeclinedNotice(false);
@@ -877,9 +1040,16 @@ export function JournalEntry() {
                       className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-aqua-100/50 dark:bg-night-card border border-aqua-200/60 dark:border-night-border shadow-sm space-y-2 ml-4 sm:ml-12"
                     >
                       <div className="flex items-center justify-between pb-1.5 border-b border-aqua-200/40 dark:border-night-border/40 text-xs">
-                        <div className="flex items-center gap-1.5 font-medium text-aqua-950 dark:text-aqua-200">
-                          <User className="w-3.5 h-3.5 text-aqua-700 dark:text-mint-400" />
-                          <span>You</span>
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 font-medium text-aqua-950 dark:text-aqua-200">
+                            <User className="w-3.5 h-3.5 text-aqua-700 dark:text-mint-400" />
+                            <span>You</span>
+                          </div>
+                          {msg.branchChoice && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] bg-aqua-200/60 dark:bg-night-card text-aqua-900 dark:text-aqua-300 font-medium">
+                              {msg.branchChoice === 'suggestion' ? 'Suggestion mode' : 'Talk more'}
+                            </span>
+                          )}
                         </div>
                         <span className="text-[11px] text-slate-400 dark:text-night-muted">
                           {formatSessionDate(msg.timestamp).time}
@@ -907,6 +1077,11 @@ export function JournalEntry() {
                           <span className="font-serif font-bold text-slate-900 dark:text-white">
                             MindMosaic Companion
                           </span>
+                          {msg.branchChoice && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] bg-aqua-100 dark:bg-night-card text-aqua-800 dark:text-aqua-300 font-medium border border-aqua-200/50 dark:border-night-border">
+                              {msg.branchChoice === 'suggestion' ? 'Suggestion mode' : 'Talk more'}
+                            </span>
+                          )}
                         </div>
                         {msg.isSimulated ? (
                           <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/50">
@@ -997,8 +1172,30 @@ export function JournalEntry() {
               </div>
             )}
 
+            {/* Branch Choice Cards: Shown after the initial companion response if no branch chosen yet */}
+            {currentSession.conversation &&
+              currentSession.conversation.length === 1 &&
+              !activeBranch &&
+              !isAiLoading && (
+                <div className="pt-1">
+                  <BranchChoice
+                    onSelectBranch={handleSelectBranch}
+                    disabled={isAiLoading}
+                  />
+                </div>
+              )}
+
             {/* Multi-Turn Message Composer */}
-            <div className="pt-2">
+            <div className="pt-2 space-y-2">
+              {/* Branch Switcher: Option A compact mode control directly above the reply composer */}
+              {activeBranch && (
+                <BranchSwitcher
+                  currentBranch={activeBranch}
+                  onSwitchBranch={handleSwitchBranch}
+                  disabled={isAiLoading}
+                />
+              )}
+
               <div className="journal-sheet rounded-2xl sm:rounded-3xl p-3.5 sm:p-5 border border-aqua-200/70 dark:border-night-border focus-within:border-aqua-500/80 dark:focus-within:border-mint-400/60 focus-within:ring-2 focus-within:ring-aqua-500/20 transition-all space-y-2.5 shadow-sm">
                 <textarea
                   ref={replyTextareaRef}

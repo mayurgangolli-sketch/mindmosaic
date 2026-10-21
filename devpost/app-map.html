@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MindMosaic — App Map & Architecture Guide</title>
+  <style>
+    :root {
+      --bg: #F8FAFC;
+      --surface: #FFFFFF;
+      --surface-card: #F1F5F9;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+      --border: #E2E8F0;
+      --brand: #0E7490;
+      --brand-light: #E0F2FE;
+      --mint: #059669;
+      --mint-light: #ECFDF5;
+      --amber: #B45309;
+      --amber-light: #FEF3C7;
+      --accent: #334155;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0B1719;
+        --surface: #112225;
+        --surface-card: #162E32;
+        --text-main: #F1F5F9;
+        --text-muted: #94A3B8;
+        --border: #1E3D43;
+        --brand: #22D3EE;
+        --brand-light: #164E63;
+        --mint: #34D399;
+        --mint-light: #064E3B;
+        --amber: #FBBF24;
+        --amber-light: #78350F;
+        --accent: #CBD5E1;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 2.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1.5rem;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      background: var(--brand-light);
+      color: var(--brand);
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: var(--text-main);
+    }
+
+    p.subtitle {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+    }
+
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem 1.75rem;
+      margin-bottom: 1.75rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-top: 1.25rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-main);
+    }
+
+    p, li {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 0.75rem;
+    }
+
+    ul, ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    li {
+      margin-bottom: 0.35rem;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85em;
+      background: var(--surface-card);
+      color: var(--text-main);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.35rem;
+      border: 1px solid var(--border);
+    }
+
+    pre code {
+      display: block;
+      padding: 1rem;
+      overflow-x: auto;
+      border-radius: 0.5rem;
+    }
+
+    .diagram-container {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin: 1.25rem 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+
+    svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .card {
+      background: var(--surface-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem 1.25rem;
+    }
+
+    .card h4 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 0.35rem;
+    }
+
+    .card p {
+      font-size: 0.85rem;
+      margin-bottom: 0;
+    }
+
+    .takeaway-box {
+      background: var(--mint-light);
+      border: 1px solid var(--mint);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin: 1rem 0;
+    }
+
+    .takeaway-box h3 {
+      color: var(--mint);
+      margin-top: 0;
+      font-size: 1.1rem;
+    }
+
+    .takeaway-box p {
+      color: var(--text-main);
+      margin-bottom: 0.5rem;
+    }
+
+    .takeaway-box p:last-child {
+      margin-bottom: 0;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <span class="badge">Take-Home Architecture Guide</span>
+      <h1>MindMosaic App Map</h1>
+      <p class="subtitle">A visual technical reference for how MindMosaic coordinates frontend user interaction, deterministic safety boundaries, AI companion dialogue, and local browser persistence.</p>
+    </header>
+
+    <!-- App Overview -->
+    <section>
+      <h2>1. Application Purpose & Core Pieces</h2>
+      <p>MindMosaic is a privacy-first emotional wellness journal and companion designed for students and working professionals. It balances immediate local data protection with compassionate, friend-first conversational AI support.</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4>Welcome Screen (<code>/</code>)</h4>
+          <p>Landing page introducing the app's calm philosophy, featuring Light/Dark/System theme toggling with zero flash-of-unstyled-theme.</p>
+        </div>
+        <div class="card">
+          <h4>Journal & Dialogue (<code>/journal</code>)</h4>
+          <p>Active reflection composer with save-first local storage, privacy consent gates, conversational branching ("Talk more" vs "Get a suggestion"), and persistent memory controls.</p>
+        </div>
+        <div class="card">
+          <h4>Companion API (<code>/api/chat</code>)</h4>
+          <p>Secure server-side proxy enforcing bounded requests, deterministic crisis/medical guards, system prompt guidelines, and swappable Groq/Mock AI providers.</p>
+        </div>
+        <div class="card">
+          <h4>History & Retrospective (<code>/history</code>)</h4>
+          <p>Reverse-chronological session list, full retrospective dialogue review, individual session deletion, and clear-all controls with partition isolation.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture & Dataflow Diagram -->
+    <section>
+      <h2>2. Architecture & Dataflow: The Reflection Journey</h2>
+      <p>The diagram below traces what happens when a user types a thought and clicks <strong>"Save & Reflect"</strong>:</p>
+
+      <div class="diagram-container">
+        <svg viewBox="0 0 760 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MindMosaic Dataflow Diagram">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 8 5 L 0 9 z" fill="#0E7490"/>
+            </marker>
+          </defs>
+
+          <!-- Step 1: Frontend User Action -->
+          <rect x="20" y="30" width="200" height="90" rx="10" fill="#E0F2FE" stroke="#0E7490" stroke-width="2"/>
+          <text x="120" y="55" font-size="13" font-weight="bold" fill="#0C4A6E" text-anchor="middle">1. User Submits Reflection</text>
+          <text x="120" y="75" font-size="11" fill="#0369A1" text-anchor="middle">components/JournalEntry.tsx</text>
+          <text x="120" y="95" font-size="10" fill="#075985" text-anchor="middle">handleSubmit() runs</text>
+
+          <!-- Arrow 1 to Local Storage -->
+          <path d="M 120 120 L 120 190" stroke="#0E7490" stroke-width="2" marker-end="url(#arrow)"/>
+          <text x="125" y="160" font-size="10" font-weight="bold" fill="#0E7490">Immediate Save</text>
+
+          <!-- Step 2: Save-First LocalStorage -->
+          <rect x="20" y="200" width="200" height="110" rx="10" fill="#ECFDF5" stroke="#059669" stroke-width="2"/>
+          <text x="120" y="225" font-size="13" font-weight="bold" fill="#064E3B" text-anchor="middle">2. Save-First Persistence</text>
+          <text x="120" y="245" font-size="11" fill="#047857" text-anchor="middle">lib/storage.ts > createSession()</text>
+          <text x="120" y="265" font-size="10" fill="#065F46" text-anchor="middle">Saved to 'mindmosaic_sessions'</text>
+          <text x="120" y="285" font-size="10" font-weight="bold" fill="#047857" text-anchor="middle">Safe if Wi-Fi drops</text>
+
+          <!-- Arrow 2 to Consent & Server -->
+          <path d="M 220 75 L 300 75" stroke="#0E7490" stroke-width="2" marker-end="url(#arrow)"/>
+          <text x="260" y="65" font-size="10" font-weight="bold" fill="#0E7490" text-anchor="middle">Consent Granted</text>
+
+          <!-- Step 3: Server Route & Safety Guards -->
+          <rect x="310" y="30" width="230" height="120" rx="10" fill="#FEF3C7" stroke="#B45309" stroke-width="2"/>
+          <text x="425" y="55" font-size="13" font-weight="bold" fill="#78350F" text-anchor="middle">3. Server Safety Guards</text>
+          <text x="425" y="75" font-size="11" fill="#92400E" text-anchor="middle">app/api/chat/route.ts</text>
+          <text x="425" y="95" font-size="10" fill="#B45309" text-anchor="middle">Rate limit + 64KB bound</text>
+          <text x="425" y="115" font-size="10" font-weight="bold" fill="#78350F" text-anchor="middle">Deterministic Medical / Crisis checks</text>
+          <text x="425" y="133" font-size="9" fill="#92400E" text-anchor="middle">Emergency? Returns 112 guidance immediately</text>
+
+          <!-- Arrow 3 to Provider -->
+          <path d="M 540 75 L 590 75" stroke="#0E7490" stroke-width="2" marker-end="url(#arrow)"/>
+
+          <!-- Step 4: AI Provider Selection -->
+          <rect x="600" y="30" width="140" height="90" rx="10" fill="#F1F5F9" stroke="#334155" stroke-width="2"/>
+          <text x="670" y="55" font-size="12" font-weight="bold" fill="#0F172A" text-anchor="middle">4. AI Provider</text>
+          <text x="670" y="75" font-size="10" fill="#475569" text-anchor="middle">Groq LLM (Live)</text>
+          <text x="670" y="90" font-size="10" fill="#475569" text-anchor="middle">or Mock Fallback</text>
+          <text x="670" y="105" font-size="9" font-weight="bold" fill="#0F172A" text-anchor="middle">₹0 Budget / Offline</text>
+
+          <!-- Arrow 4: Response back to Dialogue & Branching -->
+          <path d="M 670 120 L 670 255 L 490 255" stroke="#0E7490" stroke-width="2" marker-end="url(#arrow)"/>
+          <text x="580" y="245" font-size="10" font-weight="bold" fill="#0E7490" text-anchor="middle">Companion Reply</text>
+
+          <!-- Step 5: Conversational Branching -->
+          <rect x="270" y="200" width="210" height="110" rx="10" fill="#E0F2FE" stroke="#0E7490" stroke-width="2"/>
+          <text x="375" y="225" font-size="13" font-weight="bold" fill="#0C4A6E" text-anchor="middle">5. Conversational Branching</text>
+          <text x="375" y="245" font-size="11" fill="#0369A1" text-anchor="middle">components/BranchChoice.tsx</text>
+          <text x="375" y="265" font-size="10" fill="#075985" text-anchor="middle">Choice: 'Talk more' vs 'Get a suggestion'</text>
+          <text x="375" y="285" font-size="10" fill="#075985" text-anchor="middle">Switch modes anytime via compact bar</text>
+
+          <!-- Arrow 5: Save turn back to LocalStorage -->
+          <path d="M 270 255 L 230 255" stroke="#0E7490" stroke-width="2" marker-end="url(#arrow)"/>
+          <text x="250" y="245" font-size="9" font-weight="bold" fill="#0E7490" text-anchor="middle">Append</text>
+        </svg>
+      </div>
+    </section>
+
+    <!-- Three-Stop Code Tour -->
+    <section>
+      <h2>3. The 3-Stop Code Tour Reference</h2>
+      <p>Use these permanent anchors in the code to navigate the implementation:</p>
+
+      <ol>
+        <li>
+          <strong>Stop 1: Frontend Submission & Consent Gate</strong><br>
+          File: <code>components/JournalEntry.tsx</code><br>
+          Key Function: <code>handleSubmit(e)</code> and <code>dispatchAiTurn()</code><br>
+          <em>Why it matters:</em> Implements the save-first principle, writing to browser storage before evaluating <code>sessionStorage.getItem('mindmosaic_consent_given')</code> to gate external network calls.
+        </li>
+        <li>
+          <strong>Stop 2: Server Safety Boundaries & Provider Adapter</strong><br>
+          File: <code>app/api/chat/route.ts</code><br>
+          Key Symbols: <code>checkSafetyPatterns()</code>, <code>SYSTEM_PROMPT</code>, and <code>MockAIProvider</code><br>
+          <em>Why it matters:</em> Keeps API keys hidden on the server, intercepts medical/crisis signs deterministically before invoking AI, and transparently falls back to mock responses when offline.
+        </li>
+        <li>
+          <strong>Stop 3: Partitioned Storage & Isolated Deletion</strong><br>
+          File: <code>lib/storage.ts</code><br>
+          Key Symbols: <code>STORAGE_KEY</code>, <code>MEMORIES_KEY</code>, <code>deleteSession()</code>, and <code>saveSession()</code><br>
+          <em>Why it matters:</em> Separates raw reflections from approved memory observations. Deleting a reflection never erases approved memories, ensuring complete user autonomy.
+        </li>
+      </ol>
+    </section>
+
+    <!-- To Change This, Start Here Index -->
+    <section>
+      <h2>4. "To Change This, Start Here" Index</h2>
+      <p>A quick reference for making future modifications to MindMosaic:</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h4>Colors, Themes & Fonts</h4>
+          <p>Edit <code>tailwind.config.ts</code> and <code>app/globals.css</code>. Custom colors: Soft Aqua (<code>#0E7490</code>), Mint (<code>#059669</code>), Night Teal (<code>#0B1719</code>).</p>
+        </div>
+        <div class="card">
+          <h4>Companion Persona & Guidance</h4>
+          <p>Edit <code>app/api/chat/route.ts</code> inside <code>SYSTEM_PROMPT</code>. Adjust rules for friend-first rhythm, suggestions, and memory boundaries.</p>
+        </div>
+        <div class="card">
+          <h4>Emergency Helplines & Crisis Terms</h4>
+          <p>Edit <code>lib/safety.ts</code> for regex detection rules, and <code>components/SafetyBanner.tsx</code> for displayed phone numbers (Tele-MANAS, iCALL, 112).</p>
+        </div>
+        <div class="card">
+          <h4>Branch Choices & Visual Style</h4>
+          <p>Edit <code>components/BranchChoice.tsx</code>. Modest corner radii (<code>rounded-2xl</code> and <code>rounded-xl</code>) are used to prevent generic pill buttons.</p>
+        </div>
+        <div class="card">
+          <h4>Local Storage & Memory Models</h4>
+          <p>Edit <code>lib/storage.ts</code> for the TypeScript interfaces (<code>JournalSession</code>, <code>MemoryRecord</code>, <code>MemorySettings</code>) and storage caps (50 memories max).</p>
+        </div>
+        <div class="card">
+          <h4>History Views & Export</h4>
+          <p>Edit <code>components/HistoryList.tsx</code> and <code>components/SessionView.tsx</code> for retrospective layout and snippet truncation.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Reusable Engineering Practice -->
+    <section>
+      <h2>5. A Practice to Reuse</h2>
+      <div class="takeaway-box">
+        <h3>Deterministic Safety Guards Before Statistical Models</h3>
+        <p><strong>The Decision:</strong> MindMosaic strictly evaluates deterministic regular expression guards (<code>lib/safety.ts</code>) before assembling prompts or dispatching to the AI model.</p>
+        <p><strong>The Evidence:</strong> In <code>scratch/test_slice4_branching.ts</code> (Test 6) and <code>scratch/test_chat_route_step2.ts</code> (Tests 3 & 4), acute medical emergency signs and crisis expressions return verified emergency guidance immediately, bypassing conversational branching and LLM latency.</p>
+        <p><strong>How to Reuse This:</strong> When building AI apps with high-stakes boundaries (health, compliance, legal, or finance), never delegate critical safety classification entirely to an LLM. Always place hard-coded, deterministic rules at the perimeter of your system.</p>
+      </div>
+
+      <div class="takeaway-box" style="background: var(--surface-card); border-color: var(--brand);">
+        <h3 style="color: var(--brand);">Save-First Local Persistence</h3>
+        <p><strong>The Decision:</strong> Commit user input to local device memory synchronously before attempting any network or API dispatch.</p>
+        <p><strong>How to Reuse This:</strong> For applications handling vulnerable user content (notes, drafts, forms), saving first protects user trust against flaky connectivity, mobile network dropouts, or backend timeouts.</p>
+      </div>
+    </section>
+
+    <!-- How to Run -->
+    <section>
+      <h2>6. How to Run MindMosaic Again</h2>
+      <p>MindMosaic requires Node.js (v18+) and runs locally with zero external dependencies:</p>
+      <pre><code># 1. Install dependencies (if not already installed)
+npm install
+
+# 2. Start local development server
+npm run dev
+
+# 3. Open in your browser
+http://localhost:3000</code></pre>
+      <p style="font-size: 0.85rem; margin-top: 0.75rem;"><em>Note: To test with a live Groq model, copy <code>.env.example</code> to <code>.env.local</code> and add a free Groq API key. If omitted, MindMosaic transparently runs in offline simulated demo mode.</em></p>
+    </section>
+
+    <footer>
+      <p>MindMosaic — Built with AI Basics Hackathon Project · All data stored locally on your device.</p>
+    </footer>
+  </div>
+</body>
+</html>

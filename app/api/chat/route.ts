@@ -73,7 +73,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { message, conversationHistory = [], relevantMemories = [] } = readResult.data;
+    const {
+      message,
+      conversationHistory = [],
+      relevantMemories = [],
+      branchChoice,
+      isInternalRequest,
+    } = readResult.data;
+
+    const validatedBranchChoice =
+      branchChoice === 'suggestion' || branchChoice === 'talk' ? branchChoice : undefined;
 
     // Validate message payload
     if (!message || typeof message !== 'string' || !message.trim()) {
@@ -187,6 +196,19 @@ export async function POST(req: NextRequest) {
         '5. NEVER assign diagnostic, psychological, or clinical labels based on past memories.';
 
       effectiveSystemPrompt = SYSTEM_PROMPT + memoryBlock;
+    }
+
+    // Branch context guidance when explicitly chosen
+    if (!safetyCheck.isCrisis && validatedBranchChoice) {
+      if (validatedBranchChoice === 'suggestion') {
+        effectiveSystemPrompt +=
+          '\n\nCURRENT CONVERSATION FOCUS: The user has selected the "Get a suggestion" path. ' +
+          'Warmly acknowledge their feelings first, then provide 1–2 practical, gentle coping ideas or small perspective shifts grounded in what they shared. Avoid long checklists or clinical jargon.';
+      } else if (validatedBranchChoice === 'talk') {
+        effectiveSystemPrompt +=
+          '\n\nCURRENT CONVERSATION FOCUS: The user has selected the "Talk more" path. ' +
+          'Focus on compassionate, attentive listening and validating their specific feelings. Offer NO unsolicited advice or action plans.';
+      }
     }
 
     // Prepare message sequence for AI provider
