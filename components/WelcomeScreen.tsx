@@ -27,7 +27,16 @@ export function WelcomeScreen() {
           </div>
         </div>
 
-        <ThemeToggle />
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            href="/history"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-600 dark:text-night-muted hover:text-slate-900 dark:hover:text-white bg-white/60 dark:bg-night-surface/60 border border-aqua-200/50 dark:border-night-border hover:border-aqua-300 dark:hover:border-night-border transition-all shadow-xs"
+          >
+            <Clock className="w-3.5 h-3.5 text-aqua-600 dark:text-mint-400" />
+            <span>History</span>
+          </Link>
+          <ThemeToggle />
+        </div>
       </header>
 
       {/* Main hero composition: intimate, editorial, and inviting */}

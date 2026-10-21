@@ -38,7 +38,7 @@ MindMosaic consists of three clean parts working together in a single, lightweig
 
 3. **The Provider Adapter (The swappable AI connection):**
    - A modular TypeScript interface (`lib/ai-provider.ts`) isolating the AI provider details from the rest of the application.
-   - Connects to Groq (`lib/providers/groq.ts`) on the free developer tier (`llama-3.1-8b-instant`).
+   - Connects to Groq (`lib/providers/groq.ts`) on the free developer tier (defaulting to `openai/gpt-oss-20b`, configurable via `GROQ_MODEL`; replacing the sunsetting `llama-3.1-8b-instant`).
    - Includes an honest fallback mock adapter (`lib/providers/mock.ts`) that activates automatically if Groq is unavailable, rate-limited, or misconfigured. Any fallback response is explicitly labeled as simulated, and core journaling, reading history, and deleting entries remain fully functional.
 
 4. **Where Your Data Lives:**
@@ -88,7 +88,7 @@ User opens browser (Mobile / Desktop)
       │       anti-hallucination instructions).
       │        │
       │        ▼
-      │     [Groq Free API: llama-3.1-8b-instant]
+      │     [Groq Free API: openai/gpt-oss-20b (default)]
       │     (If network/API fails or rate limits hit → Mock provider returns transparently labeled fallback)
       │
       ├─── 4. AI Friend-First Response Rendered
@@ -122,7 +122,7 @@ User opens browser (Mobile / Desktop)
 | **Styling** | Tailwind CSS | 3.x / 4.x stable | Utility-first CSS allowing precise, lightweight responsive design, custom palettes, and dark mode classes without heavyweight UI dependencies. | [tailwindcss.com](https://tailwindcss.com/docs) |
 | **Icons** | Lucide React | Latest stable | Clean, purposeful SVG iconography. Eliminates informal emoji-as-icon patterns. | [lucide.dev](https://lucide.dev) |
 | **AI Provider** | Groq Developer Free Tier | API v1 | Strictly ₹0 / $0, no credit card required, zero data retention for training. Fast inference on budget connections. Tradeoff: Rate limits (~30 RPM) and subject to provider terms. | [console.groq.com/docs](https://console.groq.com/docs) |
-| **AI Model** | `llama-3.1-8b-instant` | Free Tier | Balanced speed, emotional reasoning, and conversational comprehension. Verified at build time. | [console.groq.com/docs/models](https://console.groq.com/docs/models) |
+| **AI Model** | `openai/gpt-oss-20b` (configurable) | Free Tier | Ultra-fast inference (~1,000 tps), 128K context, prompt caching support, replacing sunsetting `llama-3.1-8b-instant`. | [console.groq.com/docs/models](https://console.groq.com/docs/models) |
 | **Storage** | Browser `localStorage` | Built-in Web API | Local, zero-cost, requires no database setup or remote credentials. Tradeoff: Tied to single browser/device; unencrypted; cleared if browser data is wiped. | [developer.mozilla.org](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) |
 | **Runtime** | Node.js | 18+ LTS | Standard execution environment for local build and Next.js server routes. | [nodejs.org](https://nodejs.org) |
 
@@ -409,9 +409,9 @@ mindmosaic/
 ### 1. Groq Developer Free Tier & Service Realities
 - **Endpoint:** `https://api.groq.com/openai/v1/chat/completions`.
 - **Authentication:** Bearer token loaded strictly on the server from `process.env.GROQ_API_KEY`.
-- **Model:** `llama-3.1-8b-instant`.
+- **Model:** `openai/gpt-oss-20b` (default, configurable via `GROQ_MODEL`). Selected after evaluating Groq's deprecation schedule for `llama-3.1-8b-instant`.
 - **Free Tier Constraints & Volatility:**
-  - Rate limits: ~30 requests per minute (RPM), ~14,400 requests per day (RPD).
+  - Rate limits: ~30 requests per minute (RPM), ~1,000 requests per day (RPD), ~8,000 tokens per minute (TPM). Includes automatic prompt caching.
   - **No Permanence Guarantee:** Free-tier availability, model IDs, rate limits, and access conditions can be altered or discontinued by Groq at any time without notice.
   - **Strict Zero-Cost Guarantee:** MindMosaic will **never** silently transition to a paid tier or enable billing.
   - **Honest Fallback:** If Groq is unavailable, rate-limited, or misconfigured, the app falls back to `lib/providers/mock.ts`. The response is explicitly labeled in the UI as a simulated response (`[Simulated Demo Response - AI Offline]`), ensuring the user is never misled into believing a mock response is AI-generated.
@@ -509,10 +509,13 @@ The following test suites define ready-for-build verification for `5-build`:
 - [ ] Clear disclaimer displayed noting that automated detection is not guaranteed to catch all emergencies and is not a substitute for clinical care.
 
 ### Test Suite 9: Zero-Cost Security & Credential Isolation
-- [ ] Git inspection verifies `.env.local` is excluded from git tracking.
-- [ ] Browser developer tools network/source inspection confirms `GROQ_API_KEY` is never present in client bundles or responses.
-- [ ] Missing API key or Groq rate limit gracefully triggers the mock fallback with an honest disclosure, explicitly labeling simulated responses.
-- [ ] Never transitions to a paid provider under any circumstance; budget remains strictly ₹0 / $0.
+- [x] Git inspection verifies `.env.local` is excluded from git tracking.
+- [x] Browser developer tools network/source inspection confirms `GROQ_API_KEY` is never present in client bundles or responses.
+- [x] Missing API key or Groq rate limit gracefully triggers the mock fallback with an honest disclosure, explicitly labeling simulated responses.
+- [x] Zero-dependency in-memory sliding-window rate limiting on `/api/chat` (15 req/min) and `/api/memory/extract` (10 req/min) prevents abusive script loops and Groq quota exhaustion.
+- [x] Hardened HTTP security headers (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`, and strict CSP) prevent clickjacking and MIME-sniffing.
+- [x] Safe JSON parsing with generic client-facing error responses prevents internal exception detail leakage.
+- [x] Never transitions to a paid provider under any circumstance; budget remains strictly ₹0 / $0.
 
 ---
 
@@ -539,6 +542,6 @@ The following test suites define ready-for-build verification for `5-build`:
 
 ### Carried-Over Questions: Resolved
 - **Storage:** Browser `localStorage` (key: `mindmosaic_sessions`).
-- **AI Service:** Groq free developer tier (`llama-3.1-8b-instant`), with honest mock fallback.
+- **AI Service:** Groq free developer tier (`openai/gpt-oss-20b`, configurable), with honest mock fallback.
 - **Crisis Helplines:** Officially verified contact details: Tele-MANAS (`14416`), iCALL (`+91 9152987821`), Vandrevala Foundation (`+91 9999 666 555`), Emergency (`112`), and `findahelpline.com`.
 - **Interrupted Session:** Entry is saved prior to AI dispatch; each completed message turn is saved immediately. Tab closure preserves all completed turns.

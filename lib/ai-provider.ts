@@ -7,6 +7,7 @@ export interface AIProviderResponse {
   content: string;
   isSimulated: boolean;
   modelUsed: string;
+  safetyAlert?: 'crisis' | 'medical';
   error?: string;
 }
 

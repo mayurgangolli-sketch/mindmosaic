@@ -34,7 +34,7 @@ Build mode: learn
   Why now: Connects the core AI engine and implements the critical health-safety and crisis intervention boundaries before conversational branching is introduced.
   PRD ref: `prd.md > AI Companion — Friend-First Response`, `prd.md > Safety Boundary`, `prd.md > Health Concerns and Medical Referral`
   Spec ref: `spec.md > AI System Prompt & Conversational Guidelines`, `spec.md > Components` (`SafetyBanner`), `spec.md > External Services` (`Groq Developer Free Tier`)
-  Build: Implement `lib/providers/groq.ts` using `groq-sdk` or OpenAI-compatible fetch targeting `llama-3.1-8b-instant`. Craft the system prompt in `app/api/chat/route.ts` enforcing friend-first principles, varied rhythm, and non-diagnostic medical guidance. Build `components/SafetyBanner.tsx` with verified helplines (Tele-MANAS, iCALL, Vandrevala, 112).
+  Build: Implement `lib/providers/groq.ts` using OpenAI-compatible native fetch targeting `openai/gpt-oss-20b` (configurable via `GROQ_MODEL`). Craft the system prompt in `app/api/chat/route.ts` enforcing friend-first principles, varied rhythm, and non-diagnostic medical guidance. Build `components/SafetyBanner.tsx` with verified helplines (Tele-MANAS, iCALL, Vandrevala, 112).
   Verify (mechanical): Run automated test script against `/api/chat` with 5 scenarios: mild headache, emergency signs (worst headache of life), exam stress, crisis distress, and normal reflection. Verify emergency signs trigger immediate emergency guidance first without preamble, and crisis expressions trigger the helpline banner.
   Learner check: Test with fictional journal entries (e.g. feeling stressed about exams, or describing a headache). Confirm the AI listens like a real friend without offering unsolicited advice or robotic empathy.
   Commit: `Integrate Groq AI, friend-first companion prompt, and safety banners`
@@ -49,7 +49,7 @@ Build mode: learn
   Learner check: Have a brief conversation with the AI companion. Try clicking "Talk more", follow up, then switch to "Get a suggestion" and confirm the flow feels natural, supportive, and respectful.
   Commit: `Implement conversational branching and multi-turn message persistence`
 
-- [ ] **5. Memory Minimization and Anti-Hallucination Context Retrieval**
+- [x] **5. Memory Minimization and Anti-Hallucination Context Retrieval**
   Becomes usable: When the user journals, the app scans previous saved sessions for topical relevance (e.g. matching keywords like "exam", "sleep", "project"), extracts at most 1–2 brief snippets (~120 words), and passes them as context. If no past sessions are relevant, zero context is sent. The AI accurately remembers past recorded strategies without ever inventing memories.
   Why now: Delivers MindMosaic's unique kernel — real memory continuity with strict anti-fabrication and data minimization guarantees.
   PRD ref: `prd.md > AI Memory and Continuity`, `prd.md > The Unique Kernel`
@@ -59,7 +59,7 @@ Build mode: learn
   Learner check: Create an entry about trying a specific study technique. Start a new entry the next day about studying. Observe the AI naturally remembering what you actually wrote, without inventing extra details.
   Commit: `Implement memory minimization and anti-hallucination context retrieval`
 
-- [ ] **6. Journal History, Full Retrospective Session View, and Deletion**
+- [x] **6. Journal History, Full Retrospective Session View, and Deletion**
   Becomes usable: The user can navigate to `/history` to browse all saved sessions sorted newest-first with formatted dates, times, and previews. Tapping a session opens the full retrospective view (original entry + complete conversation). Individual sessions can be deleted with a confirmation dialog, and a "Clear All" action is available.
   Why now: Completes the full user lifecycle, fulfilling user data control, privacy rights, and the PRD's history requirements.
   PRD ref: `prd.md > Journal History`, `prd.md > States and Boundaries`
