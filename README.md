@@ -75,7 +75,7 @@ History View (/history) ──────► Retrospective reading, single dele
 ### 1. Clone & Install
 ```bash
 # Clone the repository
-git clone https://github.com/username/mindmosaic.git
+git clone https://github.com/mayurgangolli-sketch/mindmosaic.git
 cd mindmosaic
 
 # Install dependencies (lightweight npm packages only)
@@ -214,7 +214,7 @@ The application configures security headers, request-size limits, and in-memory 
 
 ## Hackathon Links & Submission Artifacts
 
-- **Public Repository**: [https://github.com/username/mindmosaic](https://github.com/username/mindmosaic) *(Placeholder — to be updated upon repository publication)*
+- **Public Repository**: [https://github.com/mayurgangolli-sketch/mindmosaic](https://github.com/mayurgangolli-sketch/mindmosaic)
 - **Demo Video Walkthrough**: [https://youtu.be/placeholder](https://youtu.be/placeholder) *(Placeholder — to be updated upon recording)*
 
 ---
