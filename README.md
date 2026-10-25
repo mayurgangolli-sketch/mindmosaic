@@ -221,4 +221,6 @@ The application configures security headers, request-size limits, and in-memory 
 
 ## License
 
-This project was developed for the **Devpost Build With AI: Basics** learning hackathon under a strict ₹0 / $0 budget. An open-source license has not yet been selected.
+This project was developed for the **Devpost Build With AI: Basics** learning hackathon under a strict ₹0 / $0 budget.
+
+MindMosaic is open-source software licensed under the [MIT License](LICENSE). Copyright &copy; 2026 mayurgangolli-sketch. See the [LICENSE](LICENSE) file for the full license terms.
